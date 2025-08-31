@@ -1,0 +1,131 @@
+MDBoxLayout:
+    orientation: 'vertical'
+    md_bg_color: self.theme_cls.backgroundColor
+
+    MDScreenManager:
+        id: screen_manager
+
+        BaseScreen:
+            name: 'Recv'
+
+            MDButton:
+                style: 'elevated'
+                on_press: app.scan_qrcode()
+                pos_hint: {'center_x': .5, 'center_y': .5}
+
+                MDButtonText:
+                    text: 'Scan'
+
+        BaseScreen:
+            name: 'Send'
+
+            MDButton:
+                style: 'elevated'
+                on_press: app.file_manager_open()
+                pos_hint: {'center_x': .5, 'center_y': .5}
+
+                MDButtonText:
+                    text: 'Select'
+
+        BaseScreen:
+            name: 'NAS'
+
+            MDBoxLayout:
+                size_hint: 1., 1.
+                md_bg_color: self.theme_cls.backgroundColor
+                orientation: 'vertical'
+
+                MDAnchorLayout:
+                    anchor_x: 'center'
+                    anchor_y: 'bottom'
+                    size_hint_y: .2
+
+                    MDAnchorLayout:
+                        anchor_x: 'center'
+                        anchor_y: 'bottom'
+                        size_hint_y: .2
+
+                        MDButton:
+                            style: 'text'
+                            MDButtonText:
+                                text: 'Scan this code to open'
+
+                MDBoxLayout:
+                    Widget:
+                        size_hint_x: .2
+                    QRCodeWidget:
+                        data: app.url
+                        show_border: False
+                        background_color: app.theme_cls.backgroundColor
+                    Widget:
+                        size_hint_x: .2
+
+                Widget:
+                    size_hint_y: .05
+                MDAnchorLayout:
+                    anchor_x: 'center'
+                    anchor_y: 'top'
+                    size_hint_y:.2
+                    MDButton:
+                        style: 'text'
+                        MDButtonText:
+                            text: app.url
+
+    MDNavigationBar:
+        on_switch_tabs: app.on_switch_tabs(*args)
+
+        BaseMDNavigationItem
+            icon: 'line-scan'
+            text: 'Recv'
+            active: True
+
+        BaseMDNavigationItem
+            icon: 'file-upload-outline'
+            text: 'Send'
+
+        BaseMDNavigationItem
+            icon: 'nas'
+            text: 'NAS'
+
+<BaseMDNavigationItem>
+
+    MDNavigationItemIcon:
+        icon: root.icon
+
+    MDNavigationItemLabel:
+        text: root.text
+
+
+<BaseScreen>
+
+    MDLabel:
+        text: root.name
+        halign: 'center'
+
+<ScanView>
+
+    size_hint: 1., 1.
+
+    MDBoxLayout:
+        orientation: 'vertical'
+
+        Widget:
+            size_hint_y: .2
+
+        ZBarCam:
+            id: zbarcam
+
+        Widget:
+            size_hint_y: .05
+
+        MDAnchorLayout:
+            anchor_x: 'center'
+            anchor_y: 'top'
+            size_hint_y: .2
+
+            MDButton:
+                id: exit_btn
+                style: 'filled'
+
+                MDButtonText:
+                    text: 'Exit'
