@@ -1,0 +1,4 @@
+filehelper
+==========
+
+An application for sharing and transferring files between Android devices and computers using QR codes and web services. Built using Kivy and Buildozer.
