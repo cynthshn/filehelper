@@ -1,169 +1,103 @@
-import binascii
-import marshal
+import ipaddress
 import os
-import select
 import socket
-import socketserver
-import SimpleHTTPServerWithUpload
 import _thread
-#from kivy.core.text import LabelBase
-#LabelBase.register(
-#          name='NotoSansCJK-Regular',
-#    fn_regular='NotoSansCJK-Regular.otf')
-from kivy.clock import Clock
-from kivy.lang import Builder
-from kivy.logger import Logger
-from kivy.properties import StringProperty
-from kivy.uix.modalview import ModalView
-from kivy.utils import platform
-from kivy.uix.widget import Widget
-from kivymd.app import MDApp
-from kivymd.uix.anchorlayout import MDAnchorLayout
-from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.button import MDButton, MDButtonText
-from kivymd.uix.dialog import (
-    MDDialog,
-    MDDialogIcon,
-    MDDialogHeadlineText,
-    MDDialogSupportingText,
-    MDDialogButtonContainer,
-    MDDialogContentContainer
-)
-from kivymd.uix.filemanager import MDFileManager
-from kivymd.uix.label import MDLabel
-from kivymd.uix.navigationbar import MDNavigationBar, MDNavigationItem
-from kivymd.uix.screen import MDScreen
-from kivy_garden.qrcode import QRCodeWidget
-from kivy_garden.zbarcam import ZBarCam
-from pyzbar.pyzbar import ZBarSymbol
+import kivy.core.text
 
-if 'android' == platform.lower():
+kivy.core.text.LabelBase.register(
+          name='NotoSansCJK-Regular',
+    fn_regular='NotoSansCJK-Regular.otf')
+
+import kivy.clock
+import kivy.lang
+import kivy.properties
+import kivy.uix.modalview
+import kivy.utils
+import kivy.uix.widget
+import kivymd.app
+import kivymd.uix.anchorlayout
+import kivymd.uix.boxlayout
+import kivymd.uix.button
+import kivymd.uix.filemanager
+import kivymd.uix.navigationbar
+import kivymd.uix.screen
+import kivy_garden.qrcode
+
+import werkzeug.urls
+if not hasattr(werkzeug.urls, 'url_quote'):
+    import urllib.parse
+    werkzeug.urls.url_quote = urllib.parse.quote
+
+import http_server.server
+import secrets
+import waitress.server
+
+if 'android' == kivy.utils.platform.lower():
     from android.storage import primary_external_storage_path
     from android.permissions import request_permissions, Permission
     request_permissions([Permission.READ_EXTERNAL_STORAGE,
                          Permission.WRITE_EXTERNAL_STORAGE])
     external_storage_root = primary_external_storage_path()
-    downloads = os.path.join(external_storage_root, 'Download')
-    if not os.path.exists(downloads):
-        os.makedirs(downloads, exist_ok=True)
 else:
-    external_storage_root = os.path.abspath(os.path.expanduser('~'))
-    downloads = os.path.join(external_storage_root, 'Downloads')
-    if not os.path.exists(downloads):
-        os.makedirs(downloads, exist_ok=True)
-with open('main.kv') as f:
-    KV = f.read()
-os.chdir(downloads)
+    external_storage_root = os.path.realpath(os.path.expanduser('~'))
 
-class Demo(MDApp):
+class Application(kivymd.app.MDApp):
 
     def build(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(('8.8.8.8', 53))
-        ip = s.getsockname()[0]
-        s.close()
-        server = socketserver.TCPServer(
-            (ip, 0),
-            SimpleHTTPServerWithUpload.SimpleHTTPRequestHandler)
-        port = server.socket.getsockname()[1]
-        self.url = f'http://{ip}:{port}/'
-        _thread.start_new_thread(server.serve_forever, ())
-        #for key, style in self.theme_cls.font_styles.items():
-        #    if key.lower() in (
-        #       'icon').split(): # display headline title').split():
-        #        continue
-        #    for _, fields in style.items():
-        #        fields['font-name'] = 'NotoSansCJK-Regular'
-        self.file_manager = MDFileManager(
-                            exit_manager=self.exit_manager,
-                            select_path=self.select_path)
-        return Builder.load_string(KV)
+        for key, style in self.theme_cls.font_styles.items():
+            if key.lower() != 'icon':
+                for _, fields in style.items():
+                    fields['font-name'] = 'NotoSansCJK-Regular'
+        if not ipaddr.is_private or ipaddr.is_loopback:
+            return kivy.lang.Builder.load_string(KV_IP_ISNOT_PRIVATE)
+        self.file_manager = kivymd.uix.filemanager.MDFileManager(
+            exit_manager=self.exit_manager,
+            select_path=self.select_path)
+        with open('main.kv') as f:
+            return kivy.lang.Builder.load_string(f.read())
 
     def on_switch_tabs(self, bar, item, item_icon, item_text):
         self.root.ids.screen_manager.current = item_text
 
-    def scan_qrcode(self):
-        view = ScanView()
-        def dismiss(*args, **kwrags):
-            zbarcam = view.ids.zbarcam
-            camera = getattr(zbarcam.xcamera, '_camera', None)
-            zbarcam.stop()
-            if camera:
-                camera.stop()
-                device = getattr(camera, '_device', None)
-                if device:
-                    device.release()
-            view.dismiss()
-        view.ids.zbarcam.bind(symbols=
-             lambda _, symbols: self.on_symbols(symbols, dismiss))
-        view.ids.exit_btn.bind(on_press=dismiss)
-        view.open()
-
-    def on_symbols(self, symbols, dismiss):
-        for symbol in symbols:
-            if b'file:' != symbol.data[:5]:
-                continue
-            ip, port, token, filename = marshal.loads(
-                             binascii.a2b_base64(symbol.data[5:]))
-            dismiss()
-            dialog = MDDialog(
-                MDDialogIcon(icon='download-circle-outline',),
-                MDDialogHeadlineText(text='Downloading ...'),
-                MDDialogSupportingText(text=
-                   'The file is downloading, do not close this app')
-            )
-            dialog.open()
-            context = RecvContext(ip, port, token, filename, dialog)
-            _thread.start_new_thread(context.recv_file, ())
-            break
-
     def file_manager_open(self):
-        self.file_manager.show(downloads)
+        self.file_manager.show(external_storage_root)
 
     def select_path(self, path):
-        Clock.schedule_once(lambda dt: self._select_path(path), 0)
+        kivy.clock.Clock.schedule_once(
+            lambda dt: self._select_path(path), 0)
 
     def _select_path(self, path):
         self.exit_manager()
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(('8.8.8.8', 53))
-        ip = s.getsockname()[0]
-        s.close()
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind((ip, 0))
-        port = server.getsockname()[1]
-        token = os.urandom(8)
-        context = {'running': 0, 'token': token,
-                   'path': path, 'server': server}
+        if not path.startswith(FOLDER) or not os.path.exists(path):
+            return
         filename = os.path.basename(path)
-        data = 'file:' + binascii.b2a_base64(
-             marshal.dumps((ip, port, token, filename))).decode().strip()
-        view = ModalView(anchor_x='center', anchor_y='center')
-        qr = QRCodeWidget(data=data, show_border=False,
-             background_color=self.theme_cls.backgroundColor)
-        def dismiss(*args, **kwrags):
-            context['running'] = 0
-            view.dismiss()
-        layout = MDBoxLayout(
-            MDAnchorLayout(
-                MDButton(
-                    MDButtonText(text=filename),
+        data = app.url + path[len(FOLDER):]
+        view = kivy.uix.modalview.ModalView(
+            anchor_x='center', anchor_y='center')
+        qr = kivy_garden.qrcode.QRCodeWidget(
+                data=data, show_border=False,
+                background_color=self.theme_cls.backgroundColor
+            )
+        layout = kivymd.uix.boxlayout.MDBoxLayout(
+            kivymd.uix.anchorlayout.MDAnchorLayout(
+                kivymd.uix.button.MDButton(
+                    kivymd.uix.button.MDButtonText(text=filename),
                     style='text'
                 ),
                 anchor_x='center',
                 anchor_y='bottom',
                 size_hint_y=.2
             ),
-            MDBoxLayout(
-                Widget(size_hint_x=.2), qr, Widget(size_hint_x=.2)
+            kivymd.uix.boxlayout.MDBoxLayout(
+                kivy.uix.widget.Widget(size_hint_x=.2), qr,
+                kivy.uix.widget.Widget(size_hint_x=.2)
             ),
-            Widget(size_hint_y=.05),
-            MDAnchorLayout(
-                MDButton(
-                    MDButtonText(text='Exit'),
+            kivy.uix.widget.Widget(size_hint_y=.05),
+            kivymd.uix.anchorlayout.MDAnchorLayout(
+                kivymd.uix.button.MDButton(
+                    kivymd.uix.button.MDButtonText(text='退出'),
                     style='filled',
-                    on_press=dismiss
+                    on_press=view.dismiss
                 ),
                 anchor_x='center',
                 anchor_y='top',
@@ -175,74 +109,66 @@ class Demo(MDApp):
         )
         view.add_widget(layout)
         view.open()
-        server.listen(8)
-        context['running'] = 1
-        _thread.start_new_thread(self.serve_forever, (context, ))
 
     def exit_manager(self, *args):
         self.file_manager.close()
 
-    def serve_forever(self, context):
-        server = context['server']
-        path = context['path']
-        def sendfile(conn):
-            f_out = conn.makefile('rwb')
-            if f_out.read(8) != context['token']:
-                return
-            fn = os.path.abspath(path)
-            with open(fn, 'rb') as f_in:
-                data = f_in.read(8192)
-                while data:
-                    f_out.write(data)
-                    data = f_in.read(8192)
-            f_out.flush()
-            f_out.close()
-            conn.close()
-        while context['running']:
-            r, _, _ = select.select([server.fileno()], [], [], .5)
-            if not r:
-                continue
-            conn, addr = server.accept()
-            _thread.start_new_thread(sendfile, (conn, ))
+KV_IP_ISNOT_PRIVATE = '''\
+MDBoxLayout:
+    size_hint: 1., 1.
+    md_bg_color: self.theme_cls.backgroundColor
+    orientation: 'vertical'
 
-class RecvContext:
+    MDAnchorLayout:
+        anchor_x: 'center'
+        anchor_y: 'center'
 
-    def __init__(self, ip, port, token, filename, dialog):
-        self.ip = ip
-        self.port = port
-        self.token = token
-        self.filename = filename
-        self.dialog = dialog
-        self.running = 1
+        MDButton:
+            style: 'text'
 
-    def recv_file(self):
-        ip = self.ip
-        port = self.port
-        token = self.token
-        filename = self.filename
-        dialog = self.dialog
-        try:
-            conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            conn.connect((ip, port))
-            f_in = conn.makefile('rwb')
-            path = os.path.join(downloads, filename)
-            with open(path, 'wb') as f_out:
-                f_in.write(token)
-                f_in.flush()
-                data = f_in.read(8192)
-                while data:
-                    f_out.write(data)
-                    data = f_in.read(8192)
-            f_in.close()
-            conn.close()
-        finally:
-            Clock.schedule_once(lambda dt: dialog.dismiss(), 0)
+            MDButtonText:
+                text: 'WIFI未连接，请连接后重新打开程序。'
 
-class BaseScreen(MDScreen): ...
-class BaseMDNavigationItem(MDNavigationItem):
-    icon = StringProperty()
-    text = StringProperty()
-class ScanView(ModalView): ...
+    MDAnchorLayout:
+        anchor_x: 'center'
+        anchor_y: 'center'
+
+        MDButton:
+            style: 'elevated'
+            on_press: app.stop()
+
+            MDButtonText:
+                text: '退出'
+'''
+
+class BaseScreen(kivymd.uix.screen.MDScreen):
+
+    ...
+
+class BaseMDNavigationItem(kivymd.uix.navigationbar.MDNavigationItem):
+
+    icon = kivy.properties.StringProperty()
+    text = kivy.properties.StringProperty()
+
+def get_local_ip():
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        s.connect(('114.114.114.114', 53))
+        return s.getsockname()[0]
 
 if '__main__' == __name__:
-    Demo().run()
+    app = Application()
+    ip = get_local_ip()
+    ipaddr = ipaddress.ip_address(ip)
+    http_server.server.app.secret_key = str(secrets.token_hex())
+    if external_storage_root.endswith('/'):
+        FOLDER = external_storage_root
+    else:
+        FOLDER = external_storage_root + '/'
+    http_server.server.app.config['FOLDER'] = FOLDER
+    server = waitress.server.create_server(
+                 http_server.server.app, host=ip, port=0
+             )
+    port = server.socket.getsockname()[1]
+    _thread.start_new_thread(server.run, ())
+    app.url = f'http://{ip}:{port}/'
+    app.run()

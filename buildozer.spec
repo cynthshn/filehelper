@@ -1,19 +1,19 @@
 [app]
 
 # (str) Title of your application
-title = filehelper
+title = 文件传输助手
 
 # (str) Package name
 package.name = filehelper
 
 # (str) Package domain (needed for android/ios packaging)
-package.domain = io.github.cynthshn.filehelper
+package.domain = filehelper.cynthshn.github.io
 
 # (str) Source code where the main.py live
 source.dir = .
 
 # (list) Source files to include (let empty to include all the files)
-source.include_exts = py,png,jpg,kv,atlas,otf
+source.include_exts = py,png,jpg,kv,atlas,otf,template
 
 # (list) List of inclusions using pattern matching
 #source.include_patterns = assets/*,images/*.png
@@ -37,7 +37,7 @@ version = 0.1
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = android,python3,kivy,zbarcam,libiconv,libzbar,pyzbar,xcamera,Pillow,kivy-garden.qrcode,qrcode,plyer,materialyoucolor,exceptiongroup,asyncgui,asynckivy,https://github.com/kivymd/KivyMD/archive/master.zip
+requirements = android,python3,kivy,kivy-garden.qrcode,qrcode,materialyoucolor,exceptiongroup,asyncgui,asynckivy,flask,humanize,waitress,beautify-http-server,https://github.com/kivymd/KivyMD/archive/master.zip
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
